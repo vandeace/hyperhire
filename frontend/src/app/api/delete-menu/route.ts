@@ -1,28 +1,28 @@
 import { revalidatePath } from "next/cache";
 
-export async function PATCH(request: Request) {
+export async function DELETE(request: Request) {
   try {
     const body = await request.json();
-    const { id, ...restBody } = body;
-
+    const { id } = body;
+    console.log("request :", request);
     const response = await fetch(`${process.env.BE_URL}/menu/${id}`, {
-      method: "PATCH",
+      method: "DELETE",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(restBody),
     });
-
-    if (!response.ok) {
-      throw new Error("Failed to add menu");
+    if (response.status !== 204) {
+      throw new Error("Failed to Delete menu");
     }
 
-    const data = await response.json();
     revalidatePath("/");
-    return new Response(JSON.stringify(data), {
-      status: 201,
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ message: "Item deleted successfully" }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }
+    );
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "An unknown error occurred";

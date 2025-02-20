@@ -2,10 +2,14 @@
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronRight, Edit, Plus, Trash } from "lucide-react";
 import React, { useEffect, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useSelector } from "react-redux";
 import { IMenu } from "../../../types/menu";
-import { RootState } from "../store";
-import { setSelectedTree, setTipe } from "../store/slices/treeSlice";
+import { RootState, useAppDispatch } from "../store";
+import {
+  fetchTreeData,
+  setSelectedTree,
+  setTipe,
+} from "../store/slices/treeSlice";
 
 const TreeNode: React.FC<{
   node: IMenu;
@@ -14,8 +18,22 @@ const TreeNode: React.FC<{
 }> = ({ node, expandedNodes, toggleNode }) => {
   const isExpanded = expandedNodes.has(node.name);
   const [isHovered, setIsHovered] = useState(false);
+  const dispatch = useAppDispatch();
   const isLastChild = !node.children?.length;
-  const dispatch = useDispatch();
+
+  const deleteNode = async () => {
+    const response = await fetch("/api/delete-menu", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id: node?.id }),
+    });
+    if (!response.ok) {
+      throw new Error("Failed to edit menu");
+    }
+    dispatch(fetchTreeData());
+  };
   return (
     <div className="ml-4">
       <div
@@ -62,6 +80,9 @@ const TreeNode: React.FC<{
                 variant="ghost"
                 size="smallIcon"
                 className="hover:bg-red-600 bg-red-500 rounded-full"
+                onClick={() => {
+                  deleteNode();
+                }}
               >
                 <Trash className="w-2 h-2" color="white" />
               </Button>
@@ -120,6 +141,7 @@ const TreeView: React.FC = () => {
   };
 
   const expandAll = () => {
+    if (!selector.treeData.length) return;
     const allNodeNames = new Set<string>();
     const collectNames = (nodes: IMenu[]) => {
       nodes.forEach((node) => {
@@ -157,14 +179,15 @@ const TreeView: React.FC = () => {
         </button>
       </div>
 
-      {selector.treeData.map((node) => (
-        <TreeNode
-          key={node.name}
-          node={node}
-          expandedNodes={expandedNodes}
-          toggleNode={toggleNode}
-        />
-      ))}
+      {selector.treeData.length &&
+        selector.treeData.map((node) => (
+          <TreeNode
+            key={node.name}
+            node={node}
+            expandedNodes={expandedNodes}
+            toggleNode={toggleNode}
+          />
+        ))}
     </div>
   );
 };

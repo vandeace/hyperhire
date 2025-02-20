@@ -1,10 +1,14 @@
 import { FieldApi, useForm } from "@tanstack/react-form";
 import React from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useSelector } from "react-redux";
 import { z } from "zod";
-import { RootState } from "../store";
+import { RootState, useAppDispatch } from "../store";
 import { IMenu } from "../../../types/menu";
-import { setSelectedTree, setTipe } from "../store/slices/treeSlice";
+import {
+  fetchTreeData,
+  setSelectedTree,
+  setTipe,
+} from "../store/slices/treeSlice";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function FieldInfo({ field }: { field: FieldApi<any, any, any, any> }) {
@@ -21,10 +25,12 @@ function FieldInfo({ field }: { field: FieldApi<any, any, any, any> }) {
 const userSchema = z.object({
   name: z.string().min(3, "name must be at least 3 characters"),
   depth: z.number(),
-  parentData: z.object({
-    value: z.string(),
-    label: z.string(),
-  }),
+  parentData: z
+    .object({
+      value: z.string(),
+      label: z.string(),
+    })
+    .optional(),
 });
 
 interface DropdownItem {
@@ -32,9 +38,9 @@ interface DropdownItem {
   label: string;
 }
 
-const FormComponent: React.FC<{ refetch: () => void }> = ({ refetch }) => {
+const FormComponent = () => {
   const selector = useSelector((state: RootState) => state.tree);
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
 
   const flattenTree = (items: IMenu[]): DropdownItem[] => {
     return items.reduce((acc: DropdownItem[], item) => {
@@ -46,7 +52,9 @@ const FormComponent: React.FC<{ refetch: () => void }> = ({ refetch }) => {
     }, []);
   };
 
-  const dropwDownData = flattenTree(selector.treeData);
+  const dropwDownData = selector.treeData.length
+    ? flattenTree(selector.treeData)
+    : [{ value: "", label: "No Parent" }];
 
   const generateSlug = (val: string) => {
     if (val) {
@@ -69,7 +77,7 @@ const FormComponent: React.FC<{ refetch: () => void }> = ({ refetch }) => {
     });
     dispatch(setTipe("add"));
     dispatch(setSelectedTree(null));
-    refetch();
+    dispatch(fetchTreeData());
   };
 
   const submitAdd = async (temp: {
@@ -83,13 +91,15 @@ const FormComponent: React.FC<{ refetch: () => void }> = ({ refetch }) => {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(temp),
+      body: JSON.stringify({
+        ...temp,
+        ordering: selector.treeData.length + 1,
+      }),
     });
 
     if (!response.ok) {
       throw new Error("Failed to add menu");
     }
-
     reset();
   };
 
@@ -110,10 +120,7 @@ const FormComponent: React.FC<{ refetch: () => void }> = ({ refetch }) => {
     if (!response.ok) {
       throw new Error("Failed to edit menu");
     }
-    dispatch(setTipe("add"));
-    dispatch(setSelectedTree(null));
-    refetch();
-    form.reset();
+    reset();
   };
 
   const form = useForm({
@@ -127,7 +134,10 @@ const FormComponent: React.FC<{ refetch: () => void }> = ({ refetch }) => {
     onSubmit: async ({ value }) => {
       const temp = {
         name: value.name,
-        parentId: value?.parentData?.value,
+        parentId:
+          value?.parentData?.value === ""
+            ? undefined
+            : value?.parentData?.value,
         slug: generateSlug(value.name),
         depth: value.depth,
       };
@@ -141,6 +151,8 @@ const FormComponent: React.FC<{ refetch: () => void }> = ({ refetch }) => {
       onChange: userSchema,
     },
   });
+
+  console.log("object :", form.state.errors);
 
   return (
     <div>
