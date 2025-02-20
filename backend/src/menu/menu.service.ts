@@ -11,10 +11,24 @@ export class MenuService {
   async createMenuItem(dto: CreateMenuItemDto): Promise<MenuItem> {
     const depth = dto.parentId ? await this.calculateDepth(dto.parentId) : 0;
 
+    // Get the maximum ordering value for items with the same parent
+    const maxOrdering = await this.prisma.menuItem.aggregate({
+      where: {
+        parentId: dto.parentId || null,
+      },
+      _max: {
+        ordering: true,
+      },
+    });
+
+    // New item will be placed at the end of the list
+    const newOrdering = (maxOrdering._max.ordering ?? -1) + 1;
+
     return this.prisma.menuItem.create({
       data: {
         ...dto,
         depth,
+        ordering: newOrdering,
       },
     });
   }
@@ -35,15 +49,14 @@ export class MenuService {
     return this.buildTree(items);
   }
 
-  private async buildTree(
-    items: MenuItem[],
-  ): Promise<(MenuItem & { children: any[] })[]> {
+  private async buildTree(items: MenuItem[]) {
     const tree: (MenuItem & { children: any[] })[] = [];
     for (const item of items) {
       const children = await this.prisma.menuItem.findMany({
         where: { parentId: item.id },
         orderBy: { ordering: 'asc' },
       });
+
       tree.push({
         ...item,
         children: children.length > 0 ? await this.buildTree(children) : [],
@@ -61,6 +74,17 @@ export class MenuService {
       throw new NotFoundException('Menu item not found');
     }
 
+    // Get max ordering in new parent
+    const maxOrdering = await this.prisma.menuItem.aggregate({
+      where: {
+        parentId: newParentId || null,
+      },
+      _max: {
+        ordering: true,
+      },
+    });
+
+    const newOrdering = (maxOrdering._max.ordering ?? -1) + 1;
     const newDepth = newParentId ? await this.calculateDepth(newParentId) : 0;
 
     return this.prisma.menuItem.update({
@@ -68,6 +92,7 @@ export class MenuService {
       data: {
         parentId: newParentId,
         depth: newDepth,
+        ordering: newOrdering, // Place at the end of new parent's children
       },
     });
   }
@@ -84,11 +109,6 @@ export class MenuService {
   }
 
   async updateMenuItem(id: string, dto: UpdateMenuItemDto): Promise<MenuItem> {
-    const depth =
-      dto.parentId !== undefined
-        ? await this.calculateDepth(dto.parentId)
-        : undefined;
-
     const existingItem = await this.prisma.menuItem.findUnique({
       where: { id },
     });
@@ -97,21 +117,64 @@ export class MenuService {
       throw new NotFoundException('Menu item not found');
     }
 
+    // If parent is changing, recalculate depth and ordering
+    if (dto.parentId !== undefined && dto.parentId !== existingItem.parentId) {
+      const newDepth = dto.parentId
+        ? await this.calculateDepth(dto.parentId)
+        : 0;
+
+      const maxOrdering = await this.prisma.menuItem.aggregate({
+        where: {
+          parentId: dto.parentId || null,
+        },
+        _max: {
+          ordering: true,
+        },
+      });
+
+      const newOrdering = (maxOrdering._max.ordering ?? -1) + 1;
+
+      return this.prisma.menuItem.update({
+        where: { id },
+        data: {
+          ...dto,
+          depth: newDepth,
+          ordering: newOrdering,
+        },
+      });
+    }
+
+    // If parent isn't changing, keep the same ordering
     return this.prisma.menuItem.update({
       where: { id },
-      data: {
-        ...dto,
-        depth: depth !== undefined ? depth : undefined,
-      },
+      data: dto,
     });
   }
 
   async deleteMenuItem(id: string): Promise<void> {
+    const itemToDelete = await this.prisma.menuItem.findUnique({
+      where: { id },
+    });
+
+    if (!itemToDelete) {
+      throw new NotFoundException('Menu item not found');
+    }
+
+    // Get all items with the same parent and higher ordering
+    const siblings = await this.prisma.menuItem.findMany({
+      where: {
+        parentId: itemToDelete.parentId,
+        ordering: {
+          gt: itemToDelete.ordering,
+        },
+      },
+    });
+
     // First get all children recursively
     const children = await this.getAllChildren(id);
     const childIds = children.map((child) => child.id);
 
-    // Delete all children and the item itself in a transaction
+    // Delete all children and the item itself, and update sibling orderings in a transaction
     await this.prisma.$transaction([
       ...childIds.map((childId) =>
         this.prisma.menuItem.delete({
@@ -121,6 +184,13 @@ export class MenuService {
       this.prisma.menuItem.delete({
         where: { id },
       }),
+      // Decrease ordering for all items that were after the deleted item
+      ...siblings.map((sibling) =>
+        this.prisma.menuItem.update({
+          where: { id: sibling.id },
+          data: { ordering: sibling.ordering - 1 },
+        }),
+      ),
     ]);
   }
 

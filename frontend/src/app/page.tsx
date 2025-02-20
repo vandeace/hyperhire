@@ -1,55 +1,25 @@
+"use client";
 import Image from "next/image";
-import TreeView, { TreeNodeType } from "./components/tree-menu";
-
-const treeData: TreeNodeType[] = [
-  {
-    name: "System Management",
-    children: [
-      {
-        name: "Systems",
-        children: [
-          {
-            name: "System Code",
-            children: [
-              { name: "Code Registration" },
-              { name: "Code Registration - 2" },
-            ],
-          },
-          { name: "Properties" },
-          {
-            name: "Menus",
-            children: [{ name: "Menu Registration" }],
-          },
-          {
-            name: "API List",
-            children: [{ name: "API Registration" }, { name: "API Edit" }],
-          },
-        ],
-      },
-      {
-        name: "Users & Groups",
-        children: [
-          {
-            name: "Users",
-            children: [{ name: "User Account Registration" }],
-          },
-          {
-            name: "Groups",
-            children: [{ name: "User Group Registration" }],
-          },
-          {
-            name: "사용자 승인",
-            children: [{ name: "사용자 승인 상세" }],
-          },
-        ],
-      },
-    ],
-  },
-];
+import { useEffect } from "react";
+import { useDispatch } from "react-redux";
+import FormComponent from "./components/form";
+import TreeView from "./components/tree-menu";
+import { setTreeData } from "./store/slices/treeSlice";
 
 export default function Page() {
+  const dispatch = useDispatch();
+  const fetchPosts = async () => {
+    const res = await fetch("/api/fetch-data");
+    const data = await res.json();
+    dispatch(setTreeData(data));
+  };
+  useEffect(() => {
+    fetchPosts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
-    <div className="p-4">
+    <div>
       <div className="flex space-x-4 items-center">
         <div className="rounded-full bg-arctic-blue w-12 h-12 flex justify-center items-center">
           <Image
@@ -61,8 +31,15 @@ export default function Page() {
         </div>
         <h1 className="text-blue-gray font-black text-2xl">Menus</h1>
       </div>
-      <div className="flex mt-4">
-        <TreeView treeData={treeData} />
+      <div className="p-4 w-full">
+        <div className="flex mt-4">
+          <div className="w-1/2">
+            <TreeView />
+          </div>
+          <div className="w-1/2">
+            <FormComponent refetch={fetchPosts} />
+          </div>
+        </div>
       </div>
     </div>
   );

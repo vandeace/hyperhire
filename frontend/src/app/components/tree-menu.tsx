@@ -2,20 +2,20 @@
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronRight, Edit, Plus, Trash } from "lucide-react";
 import React, { useEffect, useState } from "react";
-
-export interface TreeNodeType {
-  name: string;
-  children?: TreeNodeType[];
-}
+import { useDispatch, useSelector } from "react-redux";
+import { IMenu } from "../../../types/menu";
+import { RootState } from "../store";
+import { setSelectedTree, setTipe } from "../store/slices/treeSlice";
 
 const TreeNode: React.FC<{
-  node: TreeNodeType;
+  node: IMenu;
   expandedNodes: Set<string>;
   toggleNode: (name: string) => void;
 }> = ({ node, expandedNodes, toggleNode }) => {
   const isExpanded = expandedNodes.has(node.name);
   const [isHovered, setIsHovered] = useState(false);
-  const isLastChild = !node.children;
+  const isLastChild = !node.children?.length;
+  const dispatch = useDispatch();
   return (
     <div className="ml-4">
       <div
@@ -44,6 +44,16 @@ const TreeNode: React.FC<{
               variant="ghost"
               size="smallIcon"
               className="hover:bg-arctic-blue bg-arctic-blue rounded-full"
+              onClick={() => {
+                dispatch(
+                  setSelectedTree({
+                    depth: node.depth + 1,
+                    name: "",
+                    parentId: node.id,
+                  })
+                );
+                dispatch(setTipe("add"));
+              }}
             >
               <Plus color="white" />
             </Button>
@@ -61,6 +71,17 @@ const TreeNode: React.FC<{
               variant="ghost"
               size="smallIcon"
               className="hover:bg-arctic-blue bg-arctic-blue rounded-full"
+              onClick={() => {
+                dispatch(
+                  setSelectedTree({
+                    depth: node.depth,
+                    name: node.name,
+                    parentId: node.parentId,
+                    id: node.id,
+                  })
+                );
+                dispatch(setTipe("edit"));
+              }}
             >
               <Edit color="white" />
             </Button>
@@ -83,7 +104,8 @@ const TreeNode: React.FC<{
   );
 };
 
-const TreeView: React.FC<{ treeData: TreeNodeType[] }> = ({ treeData }) => {
+const TreeView: React.FC = () => {
+  const selector = useSelector((state: RootState) => state.tree);
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
   const toggleNode = (name: string) => {
     setExpandedNodes((prev) => {
@@ -99,21 +121,23 @@ const TreeView: React.FC<{ treeData: TreeNodeType[] }> = ({ treeData }) => {
 
   const expandAll = () => {
     const allNodeNames = new Set<string>();
-    const collectNames = (nodes: TreeNodeType[]) => {
+    const collectNames = (nodes: IMenu[]) => {
       nodes.forEach((node) => {
         allNodeNames.add(node.name);
         if (node.children) collectNames(node.children);
       });
     };
-    collectNames(treeData);
+    collectNames(selector.treeData);
     setExpandedNodes(allNodeNames);
   };
 
   const collapseAll = () => setExpandedNodes(new Set());
 
   useEffect(() => {
-    expandAll();
-  }, []);
+    if (expandedNodes.size === 0) {
+      expandAll();
+    }
+  }, [selector.treeData]);
 
   return (
     <div className="rounded-lg w-96">
@@ -133,7 +157,7 @@ const TreeView: React.FC<{ treeData: TreeNodeType[] }> = ({ treeData }) => {
         </button>
       </div>
 
-      {treeData.map((node) => (
+      {selector.treeData.map((node) => (
         <TreeNode
           key={node.name}
           node={node}

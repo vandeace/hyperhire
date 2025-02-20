@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsInt, IsBoolean } from 'class-validator';
+import { IsString, IsOptional, IsBoolean } from 'class-validator';
 
 export class CreateMenuItemDto {
   @IsString()
@@ -10,9 +10,6 @@ export class CreateMenuItemDto {
   @IsOptional()
   @IsString()
   parentId?: string;
-
-  @IsInt()
-  ordering: number;
 
   @IsOptional()
   @IsBoolean()
